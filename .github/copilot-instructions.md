@@ -1,56 +1,64 @@
-```instructions
-Project: OsonSavdo — Inventory & POS web app (Next.js + TypeScript)
+# OsonSavdo — Copilot Instructions & Architectural Guardrails
 
-Purpose
-- Help Copilot work effectively in this repository by giving context about the app, stack, structure, coding conventions, and common commands. Keep suggestions small, tested, and reversible.
+## 1. Project Overview
 
-Elevator pitch
-- OsonSavdo is a small‑retail focused inventory and POS web app. Target users are small stores in Uzbekistan. Core needs: fast POS (one terminal per cashier), modest product catalogs, offline‑first behaviour, Neon Postgres backend, and a pragmatic path to scale.
+- **Project:** OsonSavdo, a small-retail focused inventory and Point-of-Sale (POS) web app.
+- **Target Audience:** Small stores in Uzbekistan.
+- **Core Requirement:** An **offline-first** POS is the most critical feature. The app must be fast and reliable even with unstable internet.
 
-Primary goals for Copilot
-- Generate small, focused changes (one file or one feature area) unless asked for broader refactors.
-- Add tests for new behavior (unit or small e2e) where feasible.
-- Avoid adding secrets or external network calls in generated code.
+## 2. Primary Goals for Copilot
 
-Tech stack summary
-- Frontend/Backend: Next.js (App Router) + TypeScript
-- ORM: Prisma + Postgres (Neon)
-- Client offline: Dexie.js (IndexedDB), TanStack Query, Fuse.js
-- Styling: Tailwind CSS
-- Job queue (deferred for MVP): Postgres job table -> later Redis + BullMQ
-- Package manager: pnpm
+- Generate small, focused changes (one file or one feature area at a time).
+- Add tests (Vitest) for any new, non-trivial business logic.
+- Adhere strictly to the patterns and file locations defined below.
 
-Project structure (key folders)
-- `src/app` — Next.js App Router pages and layouts
-- `src/lib` — shared utilities and wrappers (Prisma client, api helpers)
-- `src/server` — server actions / API route handlers and service modules
-- `src/workers` — background worker code (may be empty in MVP)
-- `prisma` — Prisma schema and migrations
-- `docs` / `instructions/docs` — architecture and design docs
+## 3. Tech Stack Summary
 
-Coding & review guidelines
-- Use TypeScript for all new code. Add types for inputs/outputs.
-- Prefer small, pure functions and separate business logic into `src/server/services/*` so it can be reused or extracted.
-- Validate external input with `zod` in API handlers.
-- Follow existing linting rules (ESLint + Prettier). Use semicolons.
-- Add tests for any non-trivial logic (Vitest). If adding an endpoint, include a unit test for validation and a small integration test where appropriate.
-- Avoid altering unrelated files. Keep diffs focused.
+- **Full Stack:** Next.js (App Router) + TypeScript
+- **Database:** Neon (Postgres) via Prisma ORM
+- **Styling:** Tailwind CSS + shadcn/ui
+- **Client Offline Stack:** Dexie.js (IndexedDB), TanStack Query, Fuse.js
+- **Package Manager:** pnpm
 
-Common commands
-- Install: `pnpm install`
-- Dev: `pnpm dev`
-- Build: `pnpm build`
-- Migrate (Prisma): `pnpm prisma migrate dev`
-- Run tests: `pnpm test`
+## 4. Project Structure (Key Folders)
 
-Resources for Copilot
-- architecture: `instructions/docs/architecture.md`
-- product/feature spec: `instructions/docs/all-features-ideas.md`
-- README: `README.md`
+- `src/app` — Next.js App Router pages, layouts, and API routes.
+- `src/lib` — Shared utilities (Prisma client, date helpers, etc.).
+- `src/components` — Reusable React components (shadcn/ui components live in `src/components/ui`).
+- `src/server/services` — **All core business logic lives here.** These modules are imported by API routes and Server Actions.
+- `prisma` — Prisma schema (`schema.prisma`) and migrations.
+- `instructions/docs` — Architecture, PRDs, and other project documents.
 
-Safety & limitations
-- Do not commit secrets or credentials. Use env vars and document them in README.
-- If a requested change touches infra (Docker, hosting, DB credentials), add a short plan and ask for confirmation.
-- Prefer using small sample data when adding seeds or fixtures.
+## 5. Coding Patterns & Conventions
 
-```
+### Backend
+
+- **API Style:** Use Next.js API Routes for data retrieval (`GET`) and complex mutations. Use Server Actions for simpler form submissions.
+- **Business Logic:** **Never** put business logic directly in an API route handler. Place it in a dedicated service module in `src/server/services/*` and call it from the route.
+- **Validation:** All external input (API route bodies, Server Action arguments) **must** be validated with **Zod**.
+- **Database:** All database access **must** use the Prisma Client. The `prisma/schema.prisma` file is the single source of truth for data models.
+
+### Frontend
+
+- **Data Fetching:** **Always** use **TanStack Query (React Query)** for fetching and caching server data. **Do not use `useEffect` with `fetch` for this purpose.**
+- **Mutations:** Use TanStack Query's `useMutation` hook to handle data changes (create, update, delete).
+- **Forms:** Use **React Hook Form** with a **Zod** resolver for all user input forms.
+- **Styling:** Use **Tailwind CSS** utility classes. Do not write separate `.css` files.
+
+### Offline-First (Client-Side)
+
+- **Local Database:** Use **Dexie.js** to manage the IndexedDB cache for the product catalog and the queue for pending sales.
+- **Local Search:** Use **Fuse.js** for client-side fuzzy searching against the data in Dexie.
+
+## 6. Common Commands
+
+- **Install:** `pnpm install`
+- **Dev Server:** `pnpm dev`
+- **Run Tests:** `pnpm test`
+- **Database Migration:** `pnpm prisma migrate dev`
+
+## 7. Resources for Context
+
+- **Architecture:** `instructions/docs/architecture.md`
+- **Feature Ideas:** `instructions/docs/all-features-ideas.md`
+- **README:** `README.md`

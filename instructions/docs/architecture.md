@@ -52,19 +52,58 @@ Core ideas:
   2. Local stock decremented in IndexedDB for immediate feedback.
   3. Sale is queued in IndexedDB and service worker / background sync attempts to POST the sale to server.
   4. Server accepts sale with idempotency key; returns canonical sale id and reconciliation result. Client resolves local temporary id.
-  5. Conflicts (e.g., concurrent offline sales causing oversell) are resolved by server rules (first‑write‑wins, adjust stock, flag for manual review).
+  5. Conflicts (e.g., concurrent offline sales causing oversell) are resolved by a clear server+client contract:
+     - Server rule: first‑write‑wins. The first POST the server processes that consumes available stock is accepted as-is.
+     - Losing-but-still-recorded sales: the server will still persist the sale record when possible but return a `status: 'conflict'` along with `corrections[]` describing what changed (for example reduced quantity, item removed, or a flag requiring manual review).
+     - Client behaviour: when a client receives `status: 'conflict'` it must:
+       1. Visibly flag the local sale as conflicted (e.g., red banner / warning icon).
+       2. Prevent printing a final receipt for that sale until resolved.
+       3. Add the sale to a local and server-side "Sales for Review" queue so a manager can reconcile.
+       4. Show the human-readable `corrections[]` messages to the cashier so they can inform the customer immediately when appropriate.
+     - Rationale: this approach avoids silent failure, gives staff immediate context, and provides an auditable trail for manual reconciliation.
 - Printing: Print‑to‑PDF fallback from the browser; later local printer integrations can be added.
 
 ## Data model (core entities, high level)
 
-- Product: id, sku, name, attributes, costPrice, salePrice, stockByLocation, isVariable
-- Variant: id, productId, sku, attributes, stock
-- Sale: id, storeId, cashierId, lines[{sku, qty, price, discount}], payments[], createdAt, status
+- Product: id, sku, name, attributes, costPrice, salePrice, isVariable
+- Variant: id, productId, sku, attributes
+- Inventory: variantId, locationId (optional for single-store MVP), quantity — a dedicated inventory table simplifies multi-store and avoids duplicating stock fields on product/variant
+- Sale: id, storeId, cashierId, lines[{variantId, qty, price, discount}], payments[], createdAt, status
 - PaymentType: id, name, isActive
 - Customer: id, name, phone
 - Settings: currency, exchangeRate, lowStockThreshold
 
-Keep models normalized and small — Prisma is recommended for schema, types, and migrations.
+Keep models normalized and small — Prisma is recommended for schema, types, and migrations. Example Prisma snippet for an explicit inventory model:
+
+```prisma
+model Product {
+  id        String    @id @default(cuid())
+  name      String
+  sku       String?   @unique
+  variants  Variant[]
+}
+
+model Variant {
+  id        String      @id @default(cuid())
+  product   Product     @relation(fields: [productId], references: [id])
+  productId String
+  sku       String?     @unique
+  // additional attributes
+  inventory Inventory[]
+}
+
+model Inventory {
+  id         String  @id @default(cuid())
+  variant    Variant @relation(fields: [variantId], references: [id])
+  variantId  String
+  locationId String? // add for multi-store later
+  quantity   Int
+
+  @@unique([variantId, locationId])
+}
+```
+
+This makes stock operations explicit and simplifies queries like "stock for variant X at location Y" while keeping Product and Variant models focused on catalog data.
 
 ## API & sync contract (sales example)
 
@@ -73,13 +112,31 @@ POST /api/sales/sync
 - Request: { idempotencyKey, clientTempId, storeId, cashierId, lines[], totals, payments, createdAt, clientTimestamp }
 - Server behavior:
   • Validate idempotencyKey — ensure retry safe.
-  • Use transaction: insert sale, decrement stock (per location), create payment records.
-  • Return: { status: 'ok' | 'conflict', canonicalId, corrections[], serverTimestamp }
+  • Use transaction: insert sale, decrement stock (per location via `Inventory`), create payment records.
+  • Return (success): `{ status: 'ok', canonicalId, serverTimestamp }`
+  • Return (conflict):
+
+```json
+{
+  "status": "conflict",
+  "canonicalId": "sale_abc123", // may be present if server persisted a record
+  "corrections": [
+    {
+      "variantId": "v_1",
+      "requestedQty": 3,
+      "acceptedQty": 1,
+      "reason": "Insufficient stock at time of sync"
+    }
+  ],
+  "serverTimestamp": "2025-09-10T12:34:56Z"
+}
+```
 
 Conflict handling strategy:
 
-- If stock insufficient, server returns status='conflict' with adjustments and a human‑readable reason.
-- Flag sale for manual reconciliation if automatic adjustments would be risky.
+- If stock is insufficient for one or more lines, the server should prefer to persist the attempted sale (for audit) while returning `status: 'conflict'` and a `corrections[]` array that describes per-line changes and a human-readable reason.
+- If automatic adjustments would produce an unacceptable state (for example, negative inventory or large customer impact), the server can instead mark the sale as `requires_manual_review` and include a `reviewReason` in `corrections[]`.
+- Clients must treat `status: 'conflict'` as actionable: flag the sale locally, prevent final receipt printing, and surface the `corrections[]` to the cashier and manager.
 
 ## Recommended tech stack and libraries
 
@@ -141,11 +198,11 @@ Keep server business logic in small service modules that are imported by Next AP
 
 ## Milestones and next steps
 
-1. Create Prisma schema with core entities (Product, Variant, Sale, PaymentType, Customer, Settings).
+1. Create Prisma schema with core entities (Product, Variant, Inventory, Sale, PaymentType, Customer, Settings).
 2. Scaffold Next.js PWA shell with Dexie + React Query + Fuse sample and a simple POS page that loads a seeded catalog into IndexedDB.
-3. Implement `/api/sales/sync` endpoint with idempotency and a worker consumer to process queued sales.
-4. Add background job workers (BullMQ) and simple admin UI to view queued/conflicted sales.
-5. Add tests for offline sync, idempotency, and conflict cases.
+3. Implement `/api/sales/sync` endpoint with idempotency and a worker consumer to process queued sales. Ensure the endpoint returns `corrections[]` on conflicts and records persisted sale rows for auditing.
+4. Add a "Sales for Review" queue and simple admin UI to view and resolve conflicted sales (manager workflow).
+5. Add background job workers (BullMQ) when scale requires it, and tests for offline sync, idempotency, and conflict cases.
 
 ## Appendix: quick rationale for major choices
 

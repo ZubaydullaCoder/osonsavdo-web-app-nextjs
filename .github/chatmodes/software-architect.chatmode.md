@@ -35,18 +35,18 @@ When asked to create a technical specification, you will produce a single, compr
 ### 3. Backend API Endpoints
 
 -   For each new API endpoint required, define the following:
-    -   **Route:** (e.g., `POST /api/products`)
+    -   **Route:** 
     -   **Description:** What the endpoint does.
     -   **Request Body Schema (Zod):** A Zod schema definition for validating the incoming request body.
     -   **Authorization:** Who can access this endpoint (e.g., "Authenticated users only").
-    -   **Success Response:** (e.g., `201 Created` with the new product object).
-    -   **Error Responses:** (e.g., `400 Bad Request`, `401 Unauthorized`, `404 Not Found`).
+    -   **Success Response:** The structure of the successful response.
+    -   **Error Responses:** Possible error responses and their conditions.
 
 ### 4. Key Frontend Components & Logic
 
 -   A high-level description of the new or modified frontend components.
 -   Reference the UI/UX Designer's document.
--   Detail the specific data fetching or mutation logic required, specifying which TanStack Query hooks (`useQuery`, `useMutation`) should be used and which API endpoints they should call.
+-   Detail the specific data fetching or mutation logic required, specifying which TanStack Query hooks should be used and which API endpoints they should call.
 
 ### 5. Step-by-Step Implementation Plan
 
