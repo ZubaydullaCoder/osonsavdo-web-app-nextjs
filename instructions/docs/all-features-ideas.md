@@ -673,49 +673,45 @@ Excellent progress so far. Based on your request to include user authentication,
 
 ## Part 8: Authentication & Security (MVP)
 
-Purpose: Provide a secure, user-friendly way for business owners, managers, and staff to create accounts and sign in to OsonSavdo. Make onboarding fast for local users in Uzbekistan while keeping sensitive operations protected.
+Purpose: Provide a simple, secure sign-in method for the MVP that minimizes setup friction and support overhead while fitting regional habits.
 
 Short summary of related existing features:
 
 - Part 7 (User & Permissions) defines roles and RBAC that will be enforced after authentication.
-- Part 1.3 (Telegram Bot Integration) can be used as an MFA and notification channel.
+- Telegram linking (Part 1.3) remains a deferred option for notifications and recovery workflows.
 
-Feature breakdown (small, ordered steps):
+MVP decision (small and deliberate):
 
-1. Phone-based sign-up and sign-in (primary, MVP):
+- Gmail-only sign-in for MVP: users sign up and sign in exclusively with a Google (Gmail) account via OAuth. This keeps onboarding quick, avoids password management and SMS dependencies, and leverages a widely used identity provider.
 
-- Sign-up by phone number with one-time passcode (OTP, SMS). Phone-first experience is familiar and fast for local users.
-- Minimal profile capture on sign-up: business name, phone number, and owner email (optional).
-- Login via OTP (passwordless) as the default method for owners and cashiers.
+Feature summary and user flows:
 
-2. Optional email/password for admin users (secondary):
+- Quick sign-up/sign-in:
+  - Business owners and staff create an account by signing in with their Gmail address. The system captures the user's display name and email and associates them with the organization during first sign-in.
+  - First-time sign-ins are routed through a short onboarding that collects minimal organization details (business name, primary currency, and primary store) before landing in the app.
 
-- Allow setting an email and password for owners who prefer it.
-- Enforce strong password rules and require password change on first sign-in when set by an administrator.
+- Admin invitations:
+  - An organization owner can invite other staff by entering their Gmail address. Invited users accept via the same Gmail sign-in flow and are assigned roles (Cashier, Manager) by the inviter.
 
-3. Account verification and onboarding flow:
+- Role enforcement:
+  - After authentication the RBAC model from Part 7 applies (Owner, Manager, Cashier). Invitations and role assignments are handled in the Admin UI.
 
-- After sign-up, run a short guided setup: confirm currency & payment methods (Part 1), add first product or import a template (Part 3), configure POS basics.
+Acceptance criteria (MVP):
 
-4. Multi-factor and Telegram linking (MVP-light):
-
-- Provide an optional step to link the account to a Telegram user (leveraging the Telegram Bot Manager flow from Part 1.3) for notifications and an alternative sign-in/verification channel.
-
-5. Session and device handling:
-
-- Keep sessions short-lived on public/shared devices and provide a simple "Log out everywhere" option for owners.
-
-Acceptance criteria (what MVP must achieve):
-
-- A user can create an account with a phone number and complete OTP verification.
-- A user can log in with OTP and land in the guided onboarding flow.
-- Administrators can optionally create email/password accounts for users, and the system enforces role-based access after login (ties to Part 7).
-- Users can link Telegram for notifications and receive a test notification after linking.
+- A user can sign up and log in using a Gmail account and be routed into the guided onboarding flow.
+- An owner can invite another user by Gmail address; the invitee can accept and sign in with the same Gmail account.
+- Role-based permissions (Part 7) are applied after login and govern access to POS and admin areas.
 
 Edge cases & considerations:
 
-- SMS delivery failures: allow fallback to Telegram verification if the user links their Telegram account during onboarding, and capture retry/queue logic for OTP.
-- Phone number reuse: when phone numbers are reassigned, require an account recovery step that verifies business ownership (manual verification may be needed for rare cases).
+- Multiple Gmail accounts: staff must use the invited Gmail account to accept an invite; show a clear message if they try to sign in with a different email.
+- Account recovery and support: because we rely on Google credentials, support flows for account recovery (for example transferred/closed Gmail) should be handled manually by support—document the manual recovery steps in the admin guide.
+- G Suite / Workspace domains: allow invites from business domains but verify acceptance is via a Gmail account; defer SSO or custom enterprise flows to later releases.
+- Privacy & data minimalism: store only necessary profile fields (name, email, organization id) for MVP; avoid storing tokens or secrets longer than required.
+
+Notes & next steps:
+
+- This keeps the MVP small and reduces operational work (no SMS, password resets, or OTP queues). If you prefer a different primary method (phone-first or email/password), I can pivot—tell me which and I will update the spec and next tasks.
 
 ---
 
