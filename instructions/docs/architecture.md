@@ -23,11 +23,11 @@ This document describes a recommended, pragmatic architecture for OsonSavdo (MVP
 Components:
 
 - Client (Next.js PWA) — POS UI, product catalog, local cache, sale queue.
-- Server (Next.js server actions / API routes or tRPC) — business logic, persistence, reconciliation endpoints.
+- Server (Next.js server actions / API routes) — business logic, persistence, reconciliation endpoints.
 - Database — PostgreSQL (Neon) with Prisma for ORM and migrations.
-- Cache & Queue — Redis used for ephemeral cache, locks, and BullMQ job queue/workers.
-- Workers — separate worker processes/containers for background jobs (imports, sending notifications, processing queued sales).
-- DevOps/Hosting — Dockerized services for portability; recommend Render/Fly/VPS or container host. Avoid serverless for long‑running processes.
+- Cache & Queue — Redis is recommended for ephemeral cache, locks, and BullMQ job queue/workers at scale, but can be deferred for MVP.
+- Workers — separate worker processes/containers for background jobs (imports, sending notifications, processing queued sales). For MVP a simple DB‑backed job table and small polling worker is sufficient.
+- DevOps/Hosting — Dockerized services are recommended for portability; Docker is useful when you run workers and Redis, but it is optional for the very first MVP. Recommend Render/Fly/VPS or container host for production workloads. Avoid serverless for long‑running processes that need persistent connections.
 
 Diagram (textual):
 
@@ -37,7 +37,7 @@ Client (PWA)
 • Fuse.js local search
 • Service Worker (next-pwa / Workbox) + background sync
 ↕ sync queue
-Server (Next.js) ↔ Redis/BullMQ workers ↔ Neon Postgres (Prisma)
+Server (Next.js) ↔ (optional Redis/BullMQ) ↔ Neon Postgres (Prisma)
 
 ## Offline‑first POS design
 
@@ -95,14 +95,16 @@ Conflict handling strategy:
   • Background sync / queue: service worker + background sync API (or IndexedDB + periodic worker sync)
 
 - Server & API
-  • Option A (recommended): tRPC for strongly typed API (fast dev) OR
-  • Option B: Next.js API routes or REST + zod for explicit validation (easier extraction to Express later)
+  • Preferred for MVP: Next.js Server Actions and Next.js API routes / REST + zod for explicit validation — this keeps the stack simple and makes it easy to extract an Express backend later.
+  • Option (later): tRPC for end‑to‑end types after the API surface stabilizes (nice DX but can be added later).
   • Prisma for DB client and migrations
   • Neon (Postgres) as production DB
 
 - Background jobs & cache
-  • Redis (managed or self-hosted) for cache and locks
-  • BullMQ for job queues and workers
+  • MVP note: For the initial MVP, Redis and BullMQ can be deferred. Lightweight alternatives are:
+  - Use a DB‑backed job table (Postgres) and a small worker process that polls and processes pending jobs. This avoids adding Redis infra early.
+  - Use short‑lived server actions with retry logic for simple tasks and mark heavy jobs (imports/exports) for later.
+    • Scale: Add Redis (managed) + BullMQ when import/export, heavy reporting, or high throughput job processing is required.
 
 - Auth & security
   • NextAuth.js (flexible) or Auth adapter that supports sessions/jwt; keep auth provider pluggable
@@ -110,9 +112,7 @@ Conflict handling strategy:
 
 - UI & developer tooling
   • Tailwind CSS (already in repo)
-  • Headless UI components for accessibility
-  • ESLint, Prettier, Vitest for tests
-
+  •
 - Observability & monitoring
   • Sentry for errors, Prometheus/Grafana or hosted solutions for metrics
 
@@ -155,5 +155,3 @@ Keep server business logic in small service modules that are imported by Next AP
 - Redis + BullMQ: reliable job processing and retry semantics.
 
 ---
-
-If you want, I can now scaffold the starter pieces: Prisma schema, a PWA scaffold with Dexie and a seed script, and a sample `/api/sales/sync` implementation. Tell me which subset to generate first and I will create the files and run validation checks.
