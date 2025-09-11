@@ -39,6 +39,37 @@ Client (PWA)
 ↕ sync queue
 Server (Next.js) ↔ (optional Redis/BullMQ) ↔ Neon Postgres (Prisma)
 
+## High-level project structure
+
+This section maps the repository layout to responsibilities so developers can quickly find where to add features. It follows the project's conventions (Next.js App Router, TypeScript, Prisma, `src/server/services` for business logic).
+
+Suggested folders and purpose:
+
+- `src/app` — Next.js App Router pages and layouts. Keep route-level Server Components and UI wiring here. Small Server Actions for simple form submissions are allowed, but keep business logic in services.
+- `src/components` — Reusable UI components and shadcn wrappers used across pages.
+- `src/lib` — Shared utilities (prisma client, date helpers, env helpers, fetch wrappers).
+- `src/server/services` — All core business logic lives here (inventory adjustments, sale reconciliation, reports). API routes and Server Actions should import these service functions rather than embedding logic inline.
+- `src/server/api` — Next.js API route handlers (optionally under `src/app/api`) that translate HTTP requests into service calls. Keep handlers small and focused on validation (zod) and auth.
+- `src/client/offline` — Client-side offline glue: Dexie schemas, sync queue helpers, and service-worker helpers.
+- `src/components/pos` — POS-specific components (SearchBar, Cart, CheckoutSummary) and small client-only utilities.
+- `prisma` — Prisma schema and migrations.
+- `tests` — Unit and integration tests (Vitest + Playwright / MSW for API simulation).
+
+Key starter files to create when scaffolding:
+
+- `src/server/services/salesService.ts` — functions: `createSaleFromSync(payload)`, `applyInventoryAdjustments(tx, lines)`, `markSaleConflict(id, corrections)`.
+- `src/app/api/sales/route.ts` — POST handler for `/api/sales/sync` that validates with Zod, calls `salesService.createSaleFromSync`, and returns `ok|conflict` responses.
+- `src/client/offline/dexie.ts` — Dexie database schema for products, variants, inventory snapshot, and queuedSales.
+- `src/client/offline/sync.ts` — sync worker helpers: `enqueueSale`, `processQueue`, and `handleServerResponse` (maps `corrections[]` to local UI state).
+- `src/components/pos/PosPage.tsx` — POS page wiring: loads product catalog into Dexie, provides React Query hooks, and connects the universal search and cart.
+- `prisma/schema.prisma` — include `Product`, `Variant`, `Inventory`, `Sale`, `SaleLine`, `Payment`, `User`, `Organization` models as a starting point.
+
+Notes:
+
+- Keep `src/server/services/*` small, focused, and well-tested — this makes extraction to a separate backend straightforward later.
+- Avoid putting business logic inside React components or API route handlers; handlers should be adapters that validate, auth, and call services.
+- Use zod schemas co-located with service function inputs to keep validation consistent.
+
 ## Offline‑first POS design
 
 Core ideas:
